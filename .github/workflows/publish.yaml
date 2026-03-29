@@ -1,0 +1,56 @@
+name: Publish Agents
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Install volund-forge CLI
+        run: go install github.com/ai-volund/volund-forge@latest
+
+      - name: Validate agent manifests
+        run: |
+          for dir in agents/*/; do
+            if [ -f "$dir/agent.yaml" ]; then
+              echo "Validating $dir..."
+              volund-forge validate "$dir/agent.yaml"
+            fi
+          done
+
+  publish:
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Install volund-forge CLI
+        run: go install github.com/ai-volund/volund-forge@latest
+
+      - name: Publish agents
+        env:
+          FORGE_API_URL: ${{ vars.FORGE_API_URL }}
+          FORGE_API_KEY: ${{ secrets.FORGE_API_KEY }}
+        run: |
+          for dir in agents/*/; do
+            agent_name=$(basename "$dir")
+            echo "=== Publishing $agent_name ==="
+            volund-forge publish "$dir"
+          done
