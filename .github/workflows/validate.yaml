@@ -1,0 +1,44 @@
+name: Validate Agents
+on:
+  push:
+    branches: [main, feature/*]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate agent.yaml files
+        run: |
+          for dir in agents/*/; do
+            agent="$dir/agent.yaml"
+            if [ ! -f "$agent" ]; then
+              echo "WARN: $dir missing agent.yaml"
+              continue
+            fi
+            echo "Validating $agent..."
+            python3 -c "import yaml; yaml.safe_load(open('$agent'))" || exit 1
+            python3 -c "
+          import yaml, sys
+          d = yaml.safe_load(open('$agent'))
+          spec = d.get('spec', {})
+          for field in ['name', 'profileType', 'modelProvider', 'modelId']:
+              if not spec.get(field):
+                  print(f'ERROR: {field} missing in $agent')
+                  sys.exit(1)
+          skills = spec.get('skills', [])
+          print(f'  ✓ {spec[\"name\"]} ({spec[\"modelProvider\"]}/{spec[\"modelId\"]}) — {len(skills)} skills')
+          " || exit 1
+          done
+          echo "All agents valid"
+
+      - name: Check READMEs exist
+        run: |
+          for dir in agents/*/; do
+            if [ ! -f "$dir/README.md" ]; then
+              echo "WARN: $dir missing README.md"
+            fi
+          done
